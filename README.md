@@ -52,7 +52,7 @@ Supported formats:
 - The script is intentionally simple and dependency-free. It works well for the HTML structure produced by YouTube's transcript/timeline markup. If your transcripts use a different markup, the parser can be adapted.
 
 
-# Guidance on how to get the HTML ton use with this script
+# Guidance on how to get the useable HTML tag with this script
 
 ## Step by step
 1. Inspect page
