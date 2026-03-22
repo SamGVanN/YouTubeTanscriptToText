@@ -11,6 +11,13 @@ import os
 import re
 import sys
 from html import unescape
+from urllib.parse import urlparse, parse_qs
+
+try:
+    from youtube_transcript_api import YouTubeTranscriptApi
+    HAS_YOUTUBE_API = True
+except ImportError:
+    HAS_YOUTUBE_API = False
 
 
 def clean_leading_readable_time(seg: str) -> str:
@@ -28,6 +35,45 @@ def clean_leading_readable_time(seg: str) -> str:
         flags=re.I,
     )
     return pattern.sub('', seg).strip()
+
+
+def extract_video_id(url: str) -> str:
+    parsed = urlparse(url)
+    if 'youtube.com' in parsed.netloc:
+        query = parse_qs(parsed.query)
+        if 'v' in query:
+            return query['v'][0]
+    elif 'youtu.be' in parsed.netloc:
+        return parsed.path.lstrip('/')
+    raise ValueError("Invalid YouTube URL")
+
+
+def fetch_transcript_from_url(video_id: str) -> list:
+    languages = ['en', 'es', 'fr', 'de', 'it', 'pt', 'ru', 'ja', 'ko', 'zh']
+    try:
+        api = YouTubeTranscriptApi()
+        transcript_list = api.list(video_id)
+        transcript = transcript_list.find_transcript(languages)
+        return transcript.fetch()
+    except Exception as e:
+        print(f"Error fetching transcript: {e}")
+        return []
+
+
+def transcript_to_pairs(transcript: list) -> list:
+    pairs = []
+    for segment in transcript:
+        start = int(segment.start)
+        hours = start // 3600
+        minutes = (start % 3600) // 60
+        seconds = start % 60
+        if hours > 0:
+            ts = f"{hours}:{minutes:02d}:{seconds:02d}"
+        else:
+            ts = f"{minutes}:{seconds:02d}"
+        text = segment.text.strip()
+        pairs.append((ts, text))
+    return pairs
 
 
 def extract_pairs(text: str):
@@ -52,16 +98,24 @@ def extract_pairs(text: str):
 
 
 def main():
-    p = argparse.ArgumentParser(description='Extract timestamps and text from a YouTube transcript HTML file')
-    p.add_argument('file', help='Path to transcript file (HTML/text)')
+    p = argparse.ArgumentParser(description='Extract timestamps and text from a YouTube transcript HTML file or URL')
+    p.add_argument('input', help='YouTube URL or path to transcript file (HTML/text)')
     p.add_argument('-o', '--output', help='Optional output file. If omitted, the script will prompt for a filename or print to stdout')
     p.add_argument('-f', '--format', choices=['txt', 'md', 'tsv'], help='Output format (txt, md, tsv). If omitted, the script will ask you')
     args = p.parse_args()
 
-    with open(args.file, 'r', encoding='utf-8') as f:
-        content = f.read()
-
-    pairs = extract_pairs(content)
+    is_url = args.input.startswith(('http://', 'https://'))
+    if is_url:
+        if not HAS_YOUTUBE_API:
+            print("Error: youtube-transcript-api is required for YouTube URLs. Install with: pip install youtube-transcript-api")
+            sys.exit(1)
+        video_id = extract_video_id(args.input)
+        transcript = fetch_transcript_from_url(video_id)
+        pairs = transcript_to_pairs(transcript)
+    else:
+        with open(args.input, 'r', encoding='utf-8') as f:
+            content = f.read()
+        pairs = extract_pairs(content)
 
     # Ask whether to include timestamps (numbered options)
     include_ts = True
@@ -99,7 +153,10 @@ def main():
     # Determine output path (ask for name without extension if interactive)
     out_path = args.output
     if not out_path:
-        base = os.path.splitext(os.path.basename(args.file))[0]
+        if is_url:
+            base = 'transcript'
+        else:
+            base = os.path.splitext(os.path.basename(args.input))[0]
         if sys.stdin.isatty():
             try:
                 name = input('Enter output filename (no extension) [output]: ').strip()
