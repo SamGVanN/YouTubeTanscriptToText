@@ -1,2 +1,5 @@
 # Optional: only needed for YouTube URL inputs
 youtube-transcript-api
+
+# Required for Web GUI (app.py)
+streamlit

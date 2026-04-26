@@ -10,8 +10,19 @@ How it works
 ## Requirements
 - Python 3 (tested on 3.8+)
 - `youtube-transcript-api` (optional, only required for YouTube URL inputs): `pip install youtube-transcript-api`
+- `streamlit` (optional, only required for the Web GUI): `pip install streamlit`
 
-## Usage
+## Usage (Web GUI)
+
+To run the interactive web interface, simply run:
+
+```bash
+streamlit run app.py
+```
+
+This will open a modern web app in your browser where you can paste URLs or upload HTML files, preview the output, and download the results.
+
+## Usage (CLI)
 
 Interactive (default): the script will ask a few numbered questions when run without `--format` or `-o`:
 
