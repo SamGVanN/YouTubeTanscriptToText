@@ -97,6 +97,39 @@ def extract_pairs(text: str):
     return pairs
 
 
+def get_transcript_pairs(input_data, is_url):
+    if is_url:
+        if not HAS_YOUTUBE_API:
+            raise RuntimeError("youtube-transcript-api is required for YouTube URLs.")
+        video_id = extract_video_id(input_data)
+        transcript = fetch_transcript_from_url(video_id)
+        return transcript_to_pairs(transcript)
+    else:
+        return extract_pairs(input_data)
+
+
+def format_transcript(pairs, include_ts, fmt):
+    def escape_md(s: str) -> str:
+        return s.replace('|', '\\|')
+
+    if include_ts:
+        if fmt == 'tsv':
+            lines = [f"{ts}\t{seg}" for ts, seg in pairs]
+        elif fmt == 'txt':
+            lines = [f"{ts} - {seg}" for ts, seg in pairs]
+        else:  # md
+            lines = ['| Time | Text |', '|---:|---|'] + [f"| {ts} | {escape_md(seg)} |" for ts, seg in pairs]
+    else:
+        if fmt == 'tsv':
+            lines = [f"{seg}" for ts, seg in pairs]
+        elif fmt == 'txt':
+            lines = [f"{seg}" for ts, seg in pairs]
+        else:  # md (single-column table)
+            lines = ['| Text |', '|---|'] + [f"| {escape_md(seg)} |" for ts, seg in pairs]
+
+    return '\n'.join(lines)
+
+
 def main():
     p = argparse.ArgumentParser(description='Extract timestamps and text from a YouTube transcript HTML file or URL')
     p.add_argument('input', help='YouTube URL or path to transcript file (HTML/text)')
@@ -105,17 +138,16 @@ def main():
     args = p.parse_args()
 
     is_url = args.input.startswith(('http://', 'https://'))
-    if is_url:
-        if not HAS_YOUTUBE_API:
-            print("Error: youtube-transcript-api is required for YouTube URLs. Install with: pip install youtube-transcript-api")
-            sys.exit(1)
-        video_id = extract_video_id(args.input)
-        transcript = fetch_transcript_from_url(video_id)
-        pairs = transcript_to_pairs(transcript)
-    else:
-        with open(args.input, 'r', encoding='utf-8') as f:
-            content = f.read()
-        pairs = extract_pairs(content)
+    try:
+        if is_url:
+            pairs = get_transcript_pairs(args.input, is_url=True)
+        else:
+            with open(args.input, 'r', encoding='utf-8') as f:
+                content = f.read()
+            pairs = get_transcript_pairs(content, is_url=False)
+    except RuntimeError as e:
+        print(f"Error: {e}")
+        sys.exit(1)
 
     # Ask whether to include timestamps (numbered options)
     include_ts = True
@@ -169,30 +201,12 @@ def main():
             out_path = base + '.' + fmt
 
     # Build output content
-    def escape_md(s: str) -> str:
-        return s.replace('|', '\\|')
-
-    if include_ts:
-        if fmt == 'tsv':
-            lines = [f"{ts}\t{seg}" for ts, seg in pairs]
-        elif fmt == 'txt':
-            lines = [f"{ts} - {seg}" for ts, seg in pairs]
-        else:  # md
-            lines = ['| Time | Text |', '|---:|---|'] + [f"| {ts} | {escape_md(seg)} |" for ts, seg in pairs]
-    else:
-        if fmt == 'tsv':
-            lines = [f"{seg}" for ts, seg in pairs]
-        elif fmt == 'txt':
-            lines = [f"{seg}" for ts, seg in pairs]
-        else:  # md (single-column table)
-            lines = ['| Text |', '|---|'] + [f"| {escape_md(seg)} |" for ts, seg in pairs]
-
-    content_out = '\n'.join(lines)
+    content_out = format_transcript(pairs, include_ts, fmt)
 
     if out_path:
         with open(out_path, 'w', encoding='utf-8') as fo:
             fo.write(content_out)
-        print(f'Wrote {len(lines)} lines to {out_path}')
+        print(f'Wrote {len(pairs)} lines to {out_path}')
     else:
         print(content_out)
 
