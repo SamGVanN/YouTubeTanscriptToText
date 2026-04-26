@@ -14,7 +14,10 @@ How it works
 
 ## Usage (Web GUI)
 
-To run the interactive web interface, simply run:
+Available online : https://samgvann-youtubetanscripttotext.streamlit.app
+<img width="756" height="524" alt="image" src="https://github.com/user-attachments/assets/22642576-285b-4ac1-8b5e-b4a9d4869664" />
+
+Or locally, to run the interactive web interface simply run (after installing requirements):
 
 ```bash
 streamlit run app.py
